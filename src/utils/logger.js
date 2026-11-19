@@ -1,6 +1,7 @@
 /**
  * Winston Logger Configuration
  * Structured logging with timestamps and log levels.
+ * Standardized on console/stdout for container & serverless cloud runtimes.
  */
 const winston = require('winston');
 const config = require('../config');
@@ -27,11 +28,5 @@ const logger = winston.createLogger({
     }),
   ],
 });
-
-// Add file transport in production
-if (config.server.env === 'production') {
-  logger.add(new winston.transports.File({ filename: 'logs/error.log', level: 'error' }));
-  logger.add(new winston.transports.File({ filename: 'logs/combined.log' }));
-}
 
 module.exports = logger;
