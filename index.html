@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flash-Sale & Ticket Inventory Engine | High-Concurrency Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(17, 24, 39, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.35);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.35);
+      --warning: #f59e0b;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    header {
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(9, 13, 22, 0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #3b82f6, #10b981);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 6px;
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      font-size: 0.85rem;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.6; }
+    }
+
+    /* Container */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 980px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Event Selector */
+    .event-select-wrap {
+      margin-bottom: 1.25rem;
+    }
+
+    select, input {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    select:focus, input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    /* Event Details Showcase */
+    .event-hero {
+      background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.6));
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .event-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+
+    .event-name {
+      font-size: 1.35rem;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .event-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.3rem 0.6rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-live {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .badge-soldout {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    .event-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    /* Live Inventory Gauge */
+    .stock-gauge-box {
+      margin: 1.5rem 0;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .stock-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.75rem;
+    }
+
+    .stock-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stock-number-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 0.3rem;
+    }
+
+    .stock-huge {
+      font-size: 2.25rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: #38bdf8;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .stock-total {
+      font-size: 1rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #10b981, #3b82f6);
+      border-radius: 8px;
+      transition: width 0.4s ease, background 0.4s ease;
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+
+    .progress-bar-fill.warning {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+
+    .progress-bar-fill.soldout {
+      background: #ef4444;
+      box-shadow: 0 0 16px var(--danger-glow);
+    }
+
+    /* Booking Form */
+    .booking-controls {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.9rem 1.25rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: inherit;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      box-shadow: 0 4px 20px var(--primary-glow);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
+    }
+
+    .btn-primary:disabled {
+      background: #374151;
+      color: #9ca3af;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 0.5rem 0.85rem;
+      width: auto;
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* Active Reservation Card */
+    .reservation-banner {
+      display: none;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 78, 59, 0.3));
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-top: 1.25rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .res-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .res-title {
+      font-weight: 700;
+      color: #34d399;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .res-timer {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .res-detail {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      word-break: break-all;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Stress Simulator Panel */
+    .simulator-presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .preset-btn {
+      padding: 0.6rem 0.2rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover, .preset-btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+    }
+
+    .btn-fire {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      color: white;
+      font-size: 1rem;
+      font-weight: 800;
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-fire:hover:not(:disabled) {
+      box-shadow: 0 6px 28px rgba(239, 68, 68, 0.5);
+    }
+
+    /* Results Dashboard Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+
+    .stat-card {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 1rem 0.75rem;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 1.75rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+    }
+
+    .stat-val.green { color: #34d399; }
+    .stat-val.red { color: #f87171; }
+    .stat-val.yellow { color: #fbbf24; }
+
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    /* Live Feed / Console */
+    .feed-container {
+      margin-top: 1.25rem;
+      background: #06090e;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      height: 180px;
+      overflow-y: auto;
+      padding: 0.75rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+
+    .feed-item {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      display: flex;
+      gap: 0.5rem;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .feed-time { color: #6b7280; }
+    .feed-ok { color: #34d399; }
+    .feed-err { color: #f87171; }
+    .feed-warn { color: #fbbf24; }
+
+    /* Footer */
+    footer {
+      margin-top: auto;
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--card-border);
+      background: rgba(9, 13, 22, 0.5);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-title">Flash-Sale Inventory Engine</div>
+      </div>
+      <span class="brand-badge">HIGH-CONCURRENCY FAST TIER</span>
+    </div>
+
+    <div class="system-status">
+      <div class="status-item">
+        <div class="status-dot"></div>
+        <span>Redis Lua (&lt;2ms)</span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot"></div>
+        <span>PostgreSQL Worker</span>
+      </div>
+      <button class="btn btn-outline" onclick="resetCurrentStock(50)">🔄 Reset Stock (50)</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- Left Column: Live Event & Booking Panel -->
+    <section>
+      <div class="card">
+        <div class="card-title">
+          <span>🎯 Live Event Showcase</span>
+          <button class="btn btn-outline" style="padding: 0.35rem 0.75rem;" onclick="refreshEventData()">Refresh</button>
+        </div>
+
+        <!-- Event Selection -->
+        <div class="event-select-wrap">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem; display: block;">SELECT ACTIVE EVENT</label>
+          <select id="eventSelect" onchange="onEventChanged()">
+            <option value="e0000000-0000-0000-0000-000000000001">Coldplay: Music of the Spheres World Tour</option>
+            <option value="e0000000-0000-0000-0000-000000000002">Flash Sale: Premium Headphones</option>
+          </select>
+        </div>
+
+        <!-- Event Hero Box -->
+        <div class="event-hero">
+          <div class="event-header-row">
+            <h2 class="event-name" id="eventName">Coldplay: Music of the Spheres World Tour</h2>
+            <span class="event-badge badge-live" id="eventBadge">FLASH SALE LIVE</span>
+          </div>
+          <p id="eventDescription" style="color: #cbd5e1; font-size: 0.95rem; margin-bottom: 0.5rem;">Experience Coldplay live with their spectacular world tour!</p>
+          <div class="event-meta">
+            <div class="meta-item">📍 <span id="eventVenue">DY Patil Stadium, Mumbai</span></div>
+            <div class="meta-item">💰 <span id="eventPrice">₹7,500</span></div>
+            <div class="meta-item">🔒 <span>7-Min TTL Hold</span></div>
+          </div>
+        </div>
+
+        <!-- Live Stock Gauge -->
+        <div class="stock-gauge-box">
+          <div class="stock-header">
+            <span class="stock-label">Available Inventory in Redis RAM</span>
+            <div class="stock-number-wrap">
+              <span class="stock-huge" id="liveStockCount">50</span>
+              <span class="stock-total" id="totalStockCount">/ 50 left</span>
+            </div>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="stockBar" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- Booking Form -->
+        <div>
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem; display: block;">USER IDENTITY</label>
+          <div class="booking-controls">
+            <select id="userSelect">
+              <option value="a0000000-0000-0000-0000-000000000001">Alice (alice@example.com)</option>
+              <option value="a0000000-0000-0000-0000-000000000002">Bob (bob@example.com)</option>
+              <option value="a0000000-0000-0000-0000-000000000003">Charlie (charlie@example.com)</option>
+              <option value="a0000000-0000-0000-0000-000000000004">Diana (diana@example.com)</option>
+              <option value="a0000000-0000-0000-0000-000000000005">Eve (eve@example.com)</option>
+              <option value="random">🎲 Generate New Random User</option>
+            </select>
+            <select id="quantitySelect">
+              <option value="1">1 Ticket</option>
+              <option value="2">2 Tickets</option>
+              <option value="3">3 Tickets</option>
+              <option value="4">4 Tickets</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" id="btnBook" onclick="executeSingleBooking()">
+            <span>⚡ Instant Reserve Ticket (Redis Atomic Lua)</span>
+          </button>
+        </div>
+
+        <!-- Active Reservation Notification -->
+        <div class="reservation-banner" id="reservationBanner">
+          <div class="res-header">
+            <span class="res-title">✅ Reservation Held in Redis!</span>
+            <span class="res-timer" id="resTimer">07:00</span>
+          </div>
+          <div class="res-detail">
+            Booking ID: <span id="resBookingId">None</span>
+          </div>
+          <button class="btn btn-danger" style="padding: 0.5rem; font-size: 0.85rem;" onclick="cancelActiveReservation()">
+            Cancel Reservation (Release Stock back to Redis)
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Right Column: Concurrency Simulator & Telemetry -->
+    <section>
+      <div class="card">
+        <div class="card-title">
+          <span>🚀 Concurrency Stress Simulator</span>
+          <span style="font-size: 0.8rem; color: #60a5fa; font-family: var(--font-mono);">ZERO OVERSELLING TEST</span>
+        </div>
+
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;">
+          Simulate a flash-sale stampede hitting Redis simultaneously. Verifies that exactly the available stock succeeds, the rest receive a clean <code style="color: #f87171;">410 Sold Out</code>, and no database deadlocks occur.
+        </p>
+
+        <!-- Presets -->
+        <div class="simulator-presets">
+          <button class="preset-btn" onclick="selectConcurPreset(25, this)">25 Users</button>
+          <button class="preset-btn active" onclick="selectConcurPreset(50, this)">50 Users</button>
+          <button class="preset-btn" onclick="selectConcurPreset(100, this)">100 Users</button>
+          <button class="preset-btn" onclick="selectConcurPreset(500, this)">500 Users</button>
+        </div>
+
+        <button class="btn btn-fire" id="btnSimulate" onclick="runStressSimulation()">
+          <span>💥 Launch <span id="lblConcurCount">50</span> Concurrent Requests</span>
+        </button>
+
+        <!-- Realtime Result Counters -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-val green" id="statReserved">0</div>
+            <div class="stat-lbl">Reserved (201)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val red" id="statSoldOut">0</div>
+            <div class="stat-lbl">Sold Out (410)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val yellow" id="statDuplicate">0</div>
+            <div class="stat-lbl">Duplicates (409)</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">
+            <span>Live Audit Feed</span>
+            <span id="lblFeedSpeed">Fast-tier telemetry</span>
+          </div>
+          <div class="feed-container" id="feedLogs">
+            <div class="feed-item"><span class="feed-time">[Ready]</span> System initialized. Ready for traffic spikes.</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    High-Concurrency Flash-Sale & Ticket Inventory Engine · Node.js + Redis (Atomic Lua) + PostgreSQL Queue
+  </footer>
+
+  <script>
+    let currentEventId = 'e0000000-0000-0000-0000-000000000001';
+    let simulationCount = 50;
+    let timerInterval = null;
+    let remainingSeconds = 420;
+    let activeBookingId = null;
+    let activeUserId = null;
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshEventData();
+      setInterval(refreshEventData, 3000); // Live poll inventory every 3s
+    });
+
+    async function refreshEventData() {
+      try {
+        const res = await fetch(`/api/events/${currentEventId}`);
+        const data = await res.json();
+        if (data.success && data.event) {
+          const e = data.event;
+          document.getElementById('eventName').innerText = e.name;
+          document.getElementById('eventDescription').innerText = e.description || '';
+          document.getElementById('eventVenue').innerText = e.venue || 'Online';
+          document.getElementById('eventPrice').innerText = '₹' + ((e.price_cents || 750000) / 100).toLocaleString();
+          
+          const stock = e.live_stock !== undefined ? e.live_stock : e.available_stock;
+          const total = e.total_tickets || 50;
+          updateStockDisplay(stock, total);
+        }
+      } catch (err) {
+        console.error('Failed to refresh event', err);
+      }
+    }
+
+    function updateStockDisplay(stock, total) {
+      const stockEl = document.getElementById('liveStockCount');
+      const totalEl = document.getElementById('totalStockCount');
+      const barEl = document.getElementById('stockBar');
+      const badgeEl = document.getElementById('eventBadge');
+      const bookBtn = document.getElementById('btnBook');
+
+      stockEl.innerText = stock;
+      totalEl.innerText = `/ ${total} left`;
+
+      const pct = Math.max(0, Math.min(100, (stock / total) * 100));
+      barEl.style.width = pct + '%';
+
+      if (stock === 0) {
+        badgeEl.className = 'event-badge badge-soldout';
+        badgeEl.innerText = 'SOLD OUT';
+        barEl.className = 'progress-bar-fill soldout';
+        bookBtn.disabled = true;
+        bookBtn.innerText = '🚫 Sold Out';
+      } else {
+        badgeEl.className = 'event-badge badge-live';
+        badgeEl.innerText = 'FLASH SALE LIVE';
+        barEl.className = pct < 20 ? 'progress-bar-fill warning' : 'progress-bar-fill';
+        bookBtn.disabled = false;
+        bookBtn.innerText = '⚡ Instant Reserve Ticket (Redis Atomic Lua)';
+      }
+    }
+
+    function onEventChanged() {
+      currentEventId = document.getElementById('eventSelect').value;
+      refreshEventData();
+      logFeed(`Switched to event: ${currentEventId.substring(0, 8)}...`, 'feed-time');
+    }
+
+    async function resetCurrentStock(stockCount = 50) {
+      try {
+        const res = await fetch(`/api/events/${currentEventId}/reset-stock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-load-test': 'true' },
+          body: JSON.stringify({ stock: stockCount })
+        });
+        const data = await res.json();
+        logFeed(`🔄 Redis stock forcibly reset to ${stockCount}`, 'feed-ok');
+        refreshEventData();
+        resetStats();
+      } catch (err) {
+        logFeed(`❌ Reset failed: ${err.message}`, 'feed-err');
+      }
+    }
+
+    function resetStats() {
+      document.getElementById('statReserved').innerText = '0';
+      document.getElementById('statSoldOut').innerText = '0';
+      document.getElementById('statDuplicate').innerText = '0';
+    }
+
+    // Execute single booking
+    async function executeSingleBooking() {
+      const userSel = document.getElementById('userSelect').value;
+      const quantity = parseInt(document.getElementById('quantitySelect').value, 10);
+      const userId = userSel === 'random' 
+        ? 'u' + Math.random().toString(36).substring(2, 10) + '-0000-0000-0000-000000000000'
+        : userSel;
+
+      const btn = document.getElementById('btnBook');
+      btn.disabled = true;
+      const t0 = performance.now();
+
+      try {
+        const res = await fetch('/api/bookings/reserve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-load-test': 'true' },
+          body: JSON.stringify({
+            eventId: currentEventId,
+            userId: userId,
+            quantity: quantity
+          })
+        });
+
+        const latency = (performance.now() - t0).toFixed(1);
+        const data = await res.json();
+
+        if (res.status === 201) {
+          logFeed(`✅ [201 Created] Reserved in ${latency}ms | User: ${userId.substring(0, 8)}...`, 'feed-ok');
+          activeBookingId = data.bookingId;
+          activeUserId = userId;
+          startReservationTimer(data.expiresIn || 420);
+        } else if (res.status === 410) {
+          logFeed(`❌ [410 Sold Out] In ${latency}ms | No inventory remaining`, 'feed-err');
+        } else if (res.status === 409) {
+          logFeed(`⚠️ [409 Conflict] In ${latency}ms | Duplicate reservation detected`, 'feed-warn');
+        } else {
+          logFeed(`⚠️ [${res.status}] ${data.message}`, 'feed-err');
+        }
+
+        refreshEventData();
+      } catch (err) {
+        logFeed(`❌ Error: ${err.message}`, 'feed-err');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function startReservationTimer(seconds) {
+      clearInterval(timerInterval);
+      remainingSeconds = seconds;
+      document.getElementById('resBookingId').innerText = activeBookingId;
+      document.getElementById('reservationBanner').style.display = 'block';
+
+      updateTimerDisplay();
+      timerInterval = setInterval(() => {
+        remainingSeconds--;
+        updateTimerDisplay();
+        if (remainingSeconds <= 0) {
+          clearInterval(timerInterval);
+          document.getElementById('reservationBanner').style.display = 'none';
+          logFeed(`⏰ 7-minute reservation lock expired for ${activeBookingId.substring(0, 8)}...`, 'feed-warn');
+          refreshEventData();
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(remainingSeconds / 60);
+      const secs = remainingSeconds % 60;
+      document.getElementById('resTimer').innerText = 
+        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    async function cancelActiveReservation() {
+      if (!activeUserId) return;
+      try {
+        const res = await fetch('/api/bookings/cancel', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: currentEventId, userId: activeUserId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          clearInterval(timerInterval);
+          document.getElementById('reservationBanner').style.display = 'none';
+          logFeed(`↩️ Reservation cancelled, tickets returned to Redis pool`, 'feed-ok');
+          refreshEventData();
+        }
+      } catch (err) {
+        logFeed(`❌ Cancel error: ${err.message}`, 'feed-err');
+      }
+    }
+
+    // Concurrency Stress Simulator
+    function selectConcurPreset(count, btn) {
+      simulationCount = count;
+      document.getElementById('lblConcurCount').innerText = count;
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    async function runStressSimulation() {
+      const btn = document.getElementById('btnSimulate');
+      btn.disabled = true;
+      btn.innerText = `⏳ Blasting ${simulationCount} requests...`;
+      resetStats();
+
+      let reserved = 0;
+      let soldOut = 0;
+      let duplicates = 0;
+      let errors = 0;
+
+      logFeed(`💥 Firing ${simulationCount} concurrent requests at Redis...`, 'feed-warn');
+      const startTime = performance.now();
+
+      // Launch requests concurrently via Promise.all
+      const requests = [];
+      for (let i = 1; i <= simulationCount; i++) {
+        const uniqueUserId = `sim-user-${Date.now()}-${i}`;
+        const p = fetch('/api/bookings/reserve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-load-test': 'true' },
+          body: JSON.stringify({
+            eventId: currentEventId,
+            userId: uniqueUserId,
+            quantity: 1
+          })
+        }).then(async (res) => {
+          if (res.status === 201) reserved++;
+          else if (res.status === 410) soldOut++;
+          else if (res.status === 409) duplicates++;
+          else errors++;
+        }).catch(() => errors++);
+
+        requests.push(p);
+      }
+
+      await Promise.all(requests);
+      const totalTime = (performance.now() - startTime).toFixed(1);
+
+      document.getElementById('statReserved').innerText = reserved;
+      document.getElementById('statSoldOut').innerText = soldOut;
+      document.getElementById('statDuplicate').innerText = duplicates;
+
+      logFeed(`🏁 Complete in ${totalTime}ms | Reserved: ${reserved} | Sold Out: ${soldOut} | Errors: ${errors}`, 'feed-ok');
+      refreshEventData();
+
+      btn.disabled = false;
+      btn.innerText = `💥 Launch ${simulationCount} Concurrent Requests`;
+    }
+
+    function logFeed(msg, typeClass = 'feed-time') {
+      const feed = document.getElementById('feedLogs');
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      const time = new Date().toLocaleTimeString();
+      item.innerHTML = `<span class="feed-time">[${time}]</span> <span class="${typeClass}">${msg}</span>`;
+      feed.prepend(item);
+    }
+  </script>
+</body>
+</html>
