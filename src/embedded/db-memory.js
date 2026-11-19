@@ -92,7 +92,7 @@ class MemoryDB {
       const eventId = params[0];
       const event = this.events.get(eventId);
       if (!event) return { rows: [] };
-      return { rows: [{ available_stock: event.available_stock, price_cents: event.price_cents }] };
+      return { rows: [{ ...event }] };
     }
 
     // SELECT ... FROM events WHERE status = 'active'

@@ -20,6 +20,13 @@ const { query, getClient } = require('./db/pool');
 const config = require('./config');
 const logger = require('./utils/logger');
 
+// Prevent double execution if imported by both index.js and server.js
+if (global.__WORKER_STARTED__) {
+  module.exports = {};
+  return;
+}
+global.__WORKER_STARTED__ = true;
+
 const PENDING_QUEUE = 'pending_bookings';
 const DEAD_LETTER_QUEUE = 'dead_letter_bookings';
 const MAX_RETRIES = 3;

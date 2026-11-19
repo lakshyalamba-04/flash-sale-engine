@@ -115,48 +115,60 @@ app.use((req, res) => {
 // ─── Global Error Handler ────────────────────────────────
 app.use(errorHandler);
 
-// ─── Start Server ────────────────────────────────────────
-const server = app.listen(config.server.port, () => {
-  logger.info(`Flash-Sale Engine API running on port ${config.server.port}`, {
-    env: config.server.env,
-    pid: process.pid,
-  });
-});
+// Auto-start worker in-process for standalone / zero-config platforms (Render, Railway, Local)
+if (!process.env.WORKER_SEPARATE && !global.__WORKER_STARTED__) {
+  try {
+    require('./worker');
+  } catch (err) {
+    logger.warn('Inline worker initialization skipped', { error: err.message });
+  }
+}
 
-// ─── Graceful Shutdown ───────────────────────────────────
-const shutdown = async (signal) => {
-  logger.info(`${signal} received. Starting graceful shutdown...`);
-
-  server.close(async () => {
-    logger.info('HTTP server closed');
-
-    try {
-      const { redis } = require('./redis/client');
-      await redis.quit();
-      logger.info('Redis connection closed');
-    } catch (err) {
-      logger.error('Error closing Redis', { error: err.message });
-    }
-
-    try {
-      const { pool } = require('./db/pool');
-      await pool.end();
-      logger.info('PostgreSQL pool closed');
-    } catch (err) {
-      logger.error('Error closing PostgreSQL', { error: err.message });
-    }
-
-    process.exit(0);
+// ─── Start Server (Skip on Vercel Serverless) ─────────────
+if (!process.env.VERCEL) {
+  const port = process.env.PORT || config.server.port;
+  const server = app.listen(port, '0.0.0.0', () => {
+    logger.info(`Flash-Sale Engine API running on port ${port}`, {
+      env: config.server.env,
+      pid: process.pid,
+    });
   });
 
-  // Force shutdown after 10 seconds
-  setTimeout(() => {
-    logger.error('Forced shutdown after timeout');
-    process.exit(1);
-  }, 10000);
-};
+  // ─── Graceful Shutdown ───────────────────────────────────
+  const shutdown = async (signal) => {
+    logger.info(`${signal} received. Starting graceful shutdown...`);
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+    server.close(async () => {
+      logger.info('HTTP server closed');
 
-module.exports = app; // For testing
+      try {
+        const { redis } = require('./redis/client');
+        await redis.quit();
+        logger.info('Redis connection closed');
+      } catch (err) {
+        logger.error('Error closing Redis', { error: err.message });
+      }
+
+      try {
+        const { pool } = require('./db/pool');
+        await pool.end();
+        logger.info('PostgreSQL pool closed');
+      } catch (err) {
+        logger.error('Error closing PostgreSQL', { error: err.message });
+      }
+
+      process.exit(0);
+    });
+
+    // Force shutdown after 10 seconds
+    setTimeout(() => {
+      logger.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+module.exports = app;

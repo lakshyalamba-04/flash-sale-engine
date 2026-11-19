@@ -8,7 +8,16 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { MemoryRedis, getSharedMemoryClient } = require('../embedded/redis-memory');
 
-const useMemoryStore = process.env.USE_MEMORY_STORE === 'true';
+// Detect if external Redis connection string or remote host is explicitly provided
+const hasExternalRedis = Boolean(
+  process.env.REDIS_URL || 
+  (process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost' && process.env.REDIS_HOST !== '127.0.0.1')
+);
+
+// Default to in-memory store for zero-config deployments (Render, Vercel, Railway, Local without Docker),
+// unless external Redis is explicitly configured or USE_MEMORY_STORE is set to 'false'.
+const useMemoryStore = process.env.USE_MEMORY_STORE === 'true' || 
+  (process.env.USE_MEMORY_STORE !== 'false' && !hasExternalRedis);
 
 let redis;
 let createRedisClient;
@@ -22,20 +31,21 @@ if (useMemoryStore) {
   createBlockingClient = () => sharedMemory;
 } else {
   createRedisClient = (name = 'default') => {
-    const client = new Redis({
+    const connectionOptions = process.env.REDIS_URL || {
       host: config.redis.host,
       port: config.redis.port,
       password: config.redis.password,
       maxRetriesPerRequest: config.redis.maxRetriesPerRequest,
       retryStrategy(times) {
         if (times > 3) {
-          logger.warn(`Redis ${name} failed to connect after 3 retries. Consider USE_MEMORY_STORE=true.`);
+          logger.warn(`Redis ${name} failed to connect after 3 retries.`);
           return null;
         }
-        const delay = Math.min(times * 200, 1000);
-        return delay;
+        return Math.min(times * 200, 1000);
       },
-    });
+    };
+
+    const client = new Redis(connectionOptions);
 
     client.on('connect', () => {
       logger.info(`Redis ${name} client connected`);
@@ -52,4 +62,4 @@ if (useMemoryStore) {
   createBlockingClient = () => createRedisClient('blocking');
 }
 
-module.exports = { redis, createRedisClient, createBlockingClient };
+module.exports = { redis, createRedisClient, createBlockingClient, useMemoryStore };
