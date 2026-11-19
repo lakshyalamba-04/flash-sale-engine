@@ -21,9 +21,11 @@ class MemoryRedis extends EventEmitter {
     this.queues = new Map();
     this.closed = false;
 
-    // Periodic cleanup of expired keys
-    this.cleanupTimer = setInterval(() => this.cleanupExpired(), 1000);
-    this.cleanupTimer.unref();
+    // Periodic cleanup of expired keys (skip on Vercel serverless to avoid holding event loop)
+    if (!process.env.VERCEL) {
+      this.cleanupTimer = setInterval(() => this.cleanupExpired(), 1000);
+      this.cleanupTimer.unref();
+    }
 
     logger.info(`In-Memory Redis [${name}] initialized`);
   }

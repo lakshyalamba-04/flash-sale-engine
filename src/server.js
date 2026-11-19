@@ -78,6 +78,28 @@ app.use((req, res, next) => {
   next();
 });
 
+const fs = require('fs');
+
+// Safely load HTML template for all environments (including Vercel lambda bundles)
+let cachedHtml = null;
+const getHtml = () => {
+  if (cachedHtml) return cachedHtml;
+  const candidates = [
+    path.join(__dirname, '../public/index.html'),
+    path.join(process.cwd(), 'public/index.html'),
+    path.join(__dirname, 'public/index.html'),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        cachedHtml = fs.readFileSync(p, 'utf8');
+        return cachedHtml;
+      }
+    } catch {}
+  }
+  return null;
+};
+
 // ─── Static Frontend ────────────────────────────────────
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -89,7 +111,10 @@ app.use('/api/bookings', bookingLimiter, bookingRoutes);
 // Root endpoint: serves UI for browsers, JSON for API clients
 app.get('/', (req, res) => {
   if (req.accepts('html')) {
-    return res.sendFile(path.join(__dirname, '../public/index.html'));
+    const html = getHtml();
+    if (html) {
+      return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+    }
   }
   res.json({
     name: 'Flash-Sale & Ticket Inventory Engine',
@@ -116,7 +141,8 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Auto-start worker in-process for standalone / zero-config platforms (Render, Railway, Local)
-if (!process.env.WORKER_SEPARATE && !global.__WORKER_STARTED__) {
+// NEVER start background worker loops on Vercel serverless
+if (!process.env.VERCEL && !process.env.WORKER_SEPARATE && !global.__WORKER_STARTED__) {
   try {
     require('./worker');
   } catch (err) {

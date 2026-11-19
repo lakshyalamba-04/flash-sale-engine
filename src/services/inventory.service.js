@@ -121,6 +121,15 @@ class InventoryService {
     switch (result) {
       case 1:
         logger.info('Ticket reserved successfully', { bookingId, eventId, userId, quantity });
+        // On serverless environments (Vercel) without background workers, persist synchronously
+        if (process.env.VERCEL) {
+          try {
+            const { processBooking } = require('../worker');
+            await processBooking({ bookingId, eventId, userId, quantity, timestamp: Date.now() });
+          } catch (err) {
+            logger.warn('Direct persist in serverless mode failed', { error: err.message });
+          }
+        }
         return {
           success: true,
           bookingId,

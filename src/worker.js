@@ -20,9 +20,15 @@ const { query, getClient } = require('./db/pool');
 const config = require('./config');
 const logger = require('./utils/logger');
 
+// On Vercel / serverless runtimes, background worker loops are not supported
+if (process.env.VERCEL) {
+  module.exports = { processBooking };
+  return;
+}
+
 // Prevent double execution if imported by both index.js and server.js
 if (global.__WORKER_STARTED__) {
-  module.exports = {};
+  module.exports = { processBooking };
   return;
 }
 global.__WORKER_STARTED__ = true;
