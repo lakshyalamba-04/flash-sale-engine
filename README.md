@@ -2,6 +2,12 @@
 
 Enterprise-grade backend infrastructure designed to handle sudden, massive traffic spikes — flash sales, concert tickets, tatkal-style bookings — without crashing the database or overselling inventory.
 
+<p align="center">
+  <a href="https://render.com/deploy?repo=https://github.com/lakshyalamba-04/flash-sale-engine"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
+  &nbsp;&nbsp;
+  <a href="https://railway.com/new/template?template=https://github.com/lakshyalamba-04/flash-sale-engine"><img src="https://railway.com/button.svg" alt="Deploy on Railway"></a>
+</p>
+
 ## 🌐 Interactive Web Dashboard
 
 Open **`http://localhost:3000`** in any browser to launch the live graphical dashboard:
