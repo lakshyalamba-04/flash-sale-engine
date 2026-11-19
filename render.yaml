@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: flash-sale-engine
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: USE_MEMORY_STORE
+        value: "true"
