@@ -1,16 +1,7 @@
 # ⚡ High-Concurrency Flash-Sale & Ticket Inventory Engine
-
-Enterprise-grade backend infrastructure designed to handle sudden, massive traffic spikes — flash sales, concert tickets, tatkal-style bookings — without crashing the database or overselling inventory.
-
-<p align="center">
-  <a href="https://render.com/deploy?repo=https://github.com/lakshyalamba-04/flash-sale-engine"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
-  &nbsp;&nbsp;
-  <a href="https://railway.com/new/template?template=https://github.com/lakshyalamba-04/flash-sale-engine"><img src="https://railway.com/button.svg" alt="Deploy on Railway"></a>
-</p>
-
 ## 🌐 Interactive Web Dashboard
 
-Open **`http://localhost:3000`** in any browser to launch the live graphical dashboard:
+Open **`(https://flash-sale-engine-iy3z.onrender.com/)`** in any browser to launch the live graphical dashboard:
 - **Live Inventory Gauge**: Real-time stock counter and visual progress bar polling Redis RAM.
 - **Instant Booking Panel**: Single-click reservation with simulated user identities and a 7-minute TTL countdown timer.
 - **Interactive Concurrency Stress Tester**: Fire 25, 50, 100, or 500 concurrent requests right from the browser to verify zero overselling with instant visual telemetry.
@@ -277,7 +268,3 @@ The reservation lock gives users a 7-minute window to complete payment. If the T
 - **Structured Logging**: Winston with JSON format for log aggregation
 - **Dead Letter Queue**: Failed bookings (after 3 retries) are moved to a DLQ for manual review
 - **Audit Trail**: Every booking action is logged to `booking_audit_log` with timestamps and metadata
-
-## 📄 License
-
-MIT
